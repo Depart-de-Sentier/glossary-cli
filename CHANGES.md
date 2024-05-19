@@ -7,10 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.0] - 2022-03-22
+## [0.1.0] - 2024-05-20
 
-### Added
-
-### Changed
-
-### Removed
+Initial release, matching current unstable version of the glossary API found at https://api.g.sentier.dev/docs
