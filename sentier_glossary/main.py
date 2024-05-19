@@ -4,7 +4,9 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 import torch
-from sentence_transformers import SentenceTransformer, util
+from sentence_transformers import SentenceTransformer, util # type: ignore
+
+from sentier_glossary.settings import Settings
 
 
 class CommonSchemes(Enum):
@@ -16,7 +18,6 @@ class CommonSchemes(Enum):
     isic4 = "https://unstats.un.org/classifications/ISIC/rev4/scheme"
 
 
-BASE_URL = "https://api.g.sentier.dev/"
 DEFAULT_COMPONENTS = {
     "process": CommonSchemes.cn2024,
     "product": CommonSchemes.nace21,
@@ -24,17 +25,19 @@ DEFAULT_COMPONENTS = {
     "place": None,
 }
 
+cfg = Settings()
 
 class GlossaryAPI:
-    def __init__(self, base_url: str = BASE_URL, default_language: str | None = None):
+    def __init__(self, base_url: str = cfg.base_url, default_language: str | None = None):
         self.base_url = base_url
         if not self.base_url.endswith("/"):
             self.base_url += "/"
 
         self._semantic_search = False
-        self._catalogues = {}
+        # self._catalogues = {}
         self.language_code = self.get_language_code()
         print(f"Using language code '{self.language_code}'; change with `set_language_code()`")
+
 
     @property
     def _params(self) -> dict:
@@ -50,14 +53,16 @@ class GlossaryAPI:
 
     def set_language_code(self, language_code: str) -> None:
         """Override language code from system locale or input argument."""
-        if not isinstance(code, str) and len(code) >= 2:
-            raise ValueError(f"Invalid language code {code} given. Must be `str` of length two.")
+        if not isinstance(language_code, str) and len(language_code) >= 2:
+            raise ValueError(
+                f"Invalid language code {language_code} given. Must be `str` of length two."
+            )
         self.language_code = language_code[:2]
 
     def setup_semantic_search(
         self,
         model_id: str = "all-mpnet-base-v2",
-        components: dict[str, str | None] = DEFAULT_COMPONENTS,
+        components: dict[str, CommonSchemes | None] = DEFAULT_COMPONENTS,
     ) -> None:
         """Download data and metadata to perform semantic search queries"""
         self.embedder = SentenceTransformer("all-MiniLM-L6-v2")
@@ -79,6 +84,22 @@ class GlossaryAPI:
         if not data and scheme_iri not in {obj["iri"] for obj in self.schemes()}:
             raise KeyError(f"Given concept scheme IRI '{scheme_iri}' not present in glossary")
         return data
+
+    def search(self, query: str) -> str:
+        """Search the the whole concept library
+
+        Args:
+            query (str): the search query string
+
+        Returns:
+            list of results
+        """
+        print(requests.get(
+            urljoin(self.base_url, "search"), params=self._params | {"search_term": query}
+        ).json())
+        return requests.get(
+            urljoin(self.base_url, "search"), params=self._params | {"search_term": query}
+        ).json()["concepts"]
 
 
 # # Corpus with example sentences
