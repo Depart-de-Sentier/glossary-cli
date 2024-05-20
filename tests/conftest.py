@@ -1,6 +1,9 @@
 """Fixtures for sentier_glossary"""
-import pytest
+
 import locale
+
+import pytest
+
 
 @pytest.fixture(scope="session", autouse=True)
 def set_locale():

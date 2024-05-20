@@ -1,10 +1,11 @@
 import locale
 from enum import Enum
-from urllib.parse import urljoin, urlparse
+from functools import reduce
+from urllib.parse import urljoin
 
 import requests
 import torch
-from sentence_transformers import SentenceTransformer, util # type: ignore
+from sentence_transformers import SentenceTransformer, util  # type: ignore
 
 from sentier_glossary.settings import Settings
 
@@ -25,19 +26,53 @@ DEFAULT_COMPONENTS = {
     "place": None,
 }
 
-cfg = Settings()
 
 class GlossaryAPI:
-    def __init__(self, base_url: str = cfg.base_url, default_language: str | None = None):
-        self.base_url = base_url
-        if not self.base_url.endswith("/"):
-            self.base_url += "/"
+    def __init__(self, cfg: Settings | None = None, default_language: str | None = None):
+        self._cfg = cfg if cfg is not None else Settings()
+        if not self._cfg.base_url.endswith("/"):
+            self._cfg.base_url += "/"
 
         self._semantic_search = False
         # self._catalogues = {}
         self.language_code = self.get_language_code()
         print(f"Using language code '{self.language_code}'; change with `set_language_code()`")
 
+    def _requests_get(self, url: str, params: dict | None = None) -> dict:
+        """Perform a `requests.get(api_url, …)` with given parameters.
+
+        Args:
+            url: The API endpoint.
+            params: Any additional parameters to pass.
+
+        Returns:
+            dict: A dictionary containing the parsed JSON response.
+
+        Raises:
+            requests.exceptions.RequestException: If there is an error with the request,
+            such as a connection error or an invalid URL.
+
+        """
+        params = self._params | params if params is not None else self._params
+        response = requests.get(
+            reduce(urljoin, [self._cfg.base_url, f"{self._cfg.api_version}/", url]),
+            params=params,
+        )
+        try:
+            response.raise_for_status()
+        except requests.exceptions.RequestException as error:
+            msg = f"Error fetching data: {error}"
+            if response is not None:
+                status_code = response.status_code
+                msg += f"\nHTTP {status_code}"
+                if 400 <= status_code < 600:
+                    try:
+                        error_data = response.json()
+                        msg += f"\nResponse: {error_data}"
+                    except ValueError:
+                        msg += f"\nResponse: {response.text}"
+            raise requests.exceptions.RequestException(msg) from error
+        return response.json()
 
     @property
     def _params(self) -> dict:
@@ -69,18 +104,13 @@ class GlossaryAPI:
 
     def schemes(self) -> list:
         """Get all concept schemes, regardless of type"""
-        return requests.get(urljoin(self.base_url, "schemes"), params=self._params).json()[
-            "concept_schemes"
-        ]
+        return self._requests_get("schemes")["concept_schemes"]
 
     def concepts_for_scheme(self, scheme_iri: str | Enum) -> list:
         if isinstance(scheme_iri, Enum):
             scheme_iri = scheme_iri.value
         # TBD: Validate input arg
-        data = requests.get(
-            urljoin(self.base_url, "concepts"),
-            params=self._params | {"concept_scheme_iri": scheme_iri},
-        ).json()["concepts"]
+        data = self._requests_get("concepts", {"concept_scheme_iri": scheme_iri})["concepts"]
         if not data and scheme_iri not in {obj["iri"] for obj in self.schemes()}:
             raise KeyError(f"Given concept scheme IRI '{scheme_iri}' not present in glossary")
         return data
@@ -94,12 +124,7 @@ class GlossaryAPI:
         Returns:
             list of results
         """
-        print(requests.get(
-            urljoin(self.base_url, "search"), params=self._params | {"search_term": query}
-        ).json())
-        return requests.get(
-            urljoin(self.base_url, "search"), params=self._params | {"search_term": query}
-        ).json()["concepts"]
+        return self._requests_get("search", {"search_term": query})["concepts"]
 
 
 # # Corpus with example sentences
