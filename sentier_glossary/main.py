@@ -30,7 +30,6 @@ DEFAULT_COMPONENTS = {
 }
 
 
-
 class GlossaryAPI:
     def __init__(self, cfg: Settings | None = None, default_language: str | None = None):
         self._cfg = cfg if cfg is not None else Settings()
@@ -205,13 +204,14 @@ class GlossaryAPI:
             scope = scope.value
         if scope not in self._catalogues:
             raise KeyError(f"Given scope {scope} not present in semantic search cache.")
+        # Later code wants a list, not a dict keys view
         corpus = list(self._catalogues[scope])
         num_results = min(min_num_results, len(corpus))
+        # Creating embeddings is relatively expensive
         if scope not in self._embeddings:
             self._embeddings[scope] = self._embedder.encode(corpus, convert_to_tensor=True)
         query_embedding = self._embedder.encode(query, convert_to_tensor=True)
 
-        # We use cosine-similarity and torch.topk to find the highest 5 scores
         cos_scores = util.cos_sim(query_embedding, self._embeddings[scope])[0]
         return list(
             itertools.chain(

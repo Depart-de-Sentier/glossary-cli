@@ -1,7 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-
 class Settings(BaseSettings):
     base_url: str = "https://api.g.sentier.dev/"
     api_version: str = "latest"
