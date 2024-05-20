@@ -114,6 +114,7 @@ class GlossaryAPI:
             self._embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
         self._catalogues: dict[str, str] = {}
+        self._embeddings: dict[str, torch.Tensor] = {}
         self._semantic_search = True
 
         for cs in CommonSchemes:
@@ -125,7 +126,7 @@ class GlossaryAPI:
 
     def schemes(self) -> list[dict]:
         """Get all concept schemes, regardless of type"""
-        return self._requests_get("schemes")["concept_schemes"]
+        return self._requests_get("schemes")
 
     def _validate_iri(self, iri: str) -> None:
         """Basic IRI validation.
@@ -204,16 +205,17 @@ class GlossaryAPI:
             scope = scope.value
         if scope not in self._catalogues:
             raise KeyError(f"Given scope {scope} not present in semantic search cache.")
-        corpus = self._catalogues[scope]
+        corpus = list(self._catalogues[scope])
         num_results = min(min_num_results, len(corpus))
-        corpus_embeddings = self._embedder.encode(corpus, convert_to_tensor=True)
+        if scope not in self._embeddings:
+            self._embeddings[scope] = self._embedder.encode(corpus, convert_to_tensor=True)
         query_embedding = self._embedder.encode(query, convert_to_tensor=True)
 
         # We use cosine-similarity and torch.topk to find the highest 5 scores
-        cos_scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
+        cos_scores = util.cos_sim(query_embedding, self._embeddings[scope])[0]
         return list(
             itertools.chain(
-                self._catalogues[scope][corpus[idx]]
-                for _, idx in torch.topk(cos_scores, k=num_results)
+                self._catalogues[scope][corpus[idx.item()]]
+                for idx in torch.topk(cos_scores, k=num_results)[1]
             )
         )
