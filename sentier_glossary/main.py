@@ -28,14 +28,13 @@ DEFAULT_COMPONENTS = {
 
 
 class GlossaryAPI:
-    def __init__(self, cfg: Settings | None = None, default_language: str | None = None):
+    def __init__(self, cfg: Settings | None = None, language_code: str | None = None):
         self._cfg = cfg if cfg is not None else Settings()
         if not self._cfg.base_url.endswith("/"):
             self._cfg.base_url += "/"
 
         self._semantic_search = False
-        # self._catalogues = {}
-        self.language_code = self.get_language_code()
+        self.language_code = self.get_language_code(language_code)
         print(f"Using language code '{self.language_code}'; change with `set_language_code()`")
 
     def _requests_get(self, url: str, params: dict | None = None) -> dict:
@@ -79,11 +78,11 @@ class GlossaryAPI:
         """Default parameters for every request."""
         return {"lang": self.language_code}
 
-    def get_language_code(self, default: str = "en") -> str:
+    def get_language_code(self, language_code: str | None = None) -> str:
         """Get 2-letter (Set 1) ISO 639 language code."""
-        code = locale.getlocale()[0] or default
+        code = language_code or locale.getlocale()[0] or self._cfg.fallback_language
         if isinstance(code, str) and len(code) >= 2:
-            return code[:2]
+            return code[:2].lower()
         raise ValueError(f"Invalid language code {code} found; set locale or `default_language`")
 
     def set_language_code(self, language_code: str) -> None:
@@ -92,7 +91,13 @@ class GlossaryAPI:
             raise ValueError(
                 f"Invalid language code {language_code} given. Must be `str` of length two."
             )
-        self.language_code = language_code[:2]
+        self.language_code = language_code[:2].lower()
+        if self._semantic_search:
+            warnings.warn(
+                f"""Semantic search cache is stale and disabled. Please reenable with
+                `setup_semantic_search()` to use semantic search with {self.language_code}."""
+            )
+            self._semantic_search = False
 
     def setup_semantic_search(
         self,
