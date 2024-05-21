@@ -55,7 +55,7 @@ With this class, you can retrieve the collections (logical organization of conce
   'notation': '35',
   'prefLabel': '35 Passenger ship',
   'altLabel': 'Passenger ship',
-  'scopeNote': 'Ship categories included: passengers (excluding cruise passengers). This category should be subdivided into: a) High speed passenger ship specialised meeting the requirements set out in the IMO HSC Code paragraph 1.4.30; b) Other passenger ships. A ship designed with one or more decks specifically for the carriage of passengers, and where there is either no cabin accommodation for the passengers (un- berthed) or not all of the passengers are accommodated in cabins where cabins are provided, is sometimes referred to as a “ferry”. Ro-Ro passenger ships are excluded.'},
+  'scopeNote': 'Ship categories included: passengers (excluding cruise passengers)...'},
  {'iri': 'http://data.europa.eu/z1e/icstcom2009/36',
   'identifier': '36',
   'notation': '36',
@@ -67,7 +67,7 @@ With this class, you can retrieve the collections (logical organization of conce
  'notation': '35',
  'prefLabel': '35 Passenger ship',
  'identifier': '35',
- 'scopeNote': 'Ship categories included: passengers (excluding cruise passengers). This category should be subdivided into: a) High speed passenger ship specialised meeting the requirements set out in the IMO HSC Code paragraph 1.4.30; b) Other passenger ships. A ship designed with one or more decks specifically for the carriage of passengers, and where there is either no cabin accommodation for the passengers (un- berthed) or not all of the passengers are accommodated in cabins where cabins are provided, is sometimes referred to as a “ferry”. Ro-Ro passenger ships are excluded.',
+ 'scopeNote': 'Ship categories included: passengers (excluding cruise passengers)...',
  'altLabel': 'Passenger ship',
  'concept_schemes': ['http://data.europa.eu/z1e/icstcom2009/icst'],
  'relations': []}
@@ -77,18 +77,56 @@ The Sentier glossary uses vocabularies built on [SKOS](https://www.w3.org/TR/200
 
 ### Language of Results
 
-The results returned from the API will depend on your language preferences. For example:
-
-
-
-By default, the glossary client uses your default [language in your locale](https://en.wikipedia.org/wiki/Locale_(computer_software)). You can change it when instantiating the API:
+The results returned from the API will depend on your language preferences. By default, the glossary client uses the default [language in your locale](https://en.wikipedia.org/wiki/Locale_(computer_software)). You can change it when instantiating the API:
 
 ```python
 api = GlossaryAPI(language_code="fr")
 ```
 
-You can also use `set_language_code()` to change the language of an existing `GlossaryAPI` client.
+Language codes follow [ISO 639-1](https://en.wikipedia.org/wiki/ISO_639-1), and are two lowercase letters, e.g. `en`, `es`, and `zh`.
 
+You can also use `set_language_code()` to change the language of an existing `GlossaryAPI` client. For example:
+
+```python
+> api.set_language_code('fr')
+> api.concept('http://data.europa.eu/z1e/icstcom2009/35')
+{'iri': 'http://data.europa.eu/z1e/icstcom2009/35',
+ 'notation': '35',
+ 'prefLabel': '35 Passagers',
+ 'identifier': '35',
+ 'scopeNote': 'Catégories incluses dans chaque type de navire: Passagers (sauf passagers de navires de croisière)',
+ 'altLabel': 'Passagers',
+ 'concept_schemes': ['http://data.europa.eu/z1e/icstcom2009/icst'],
+ 'relations': []}
+```
+
+The default fallback language of the glossary is `en`.
+
+### Semantic Search
+
+The API search endpoint is under revision; for the time being we can use local semantic search. This only works with concept schemes given in `CommonSchemes`, currently:
+
+* cn2024 (http://data.europa.eu/xsp/cn2024/cn2024)
+* nace21 (http://data.europa.eu/ux2/nace2.1/nace2.1)
+* low2015 (http://data.europa.eu/6p8/low2015/scheme)
+* icst2009 (http://data.europa.eu/z1e/icstcom2009/icst)
+* prodcom2023 (http://data.europa.eu/qw1/prodcom2023/prodcom2023)
+* isic4 (https://unstats.un.org/classifications/ISIC/rev4/scheme)
+
+To make a search query, pass the search query and the concept scheme. For example:
+
+```python
+> api.semantic_search("piggies", CommonSchemes.cn2024)
+[[{'iri': 'http://data.europa.eu/xsp/cn2024/080291000080',
+   'identifier': '080291000080',
+   'notation': '0802 91 00',
+   'prefLabel': '0802 91 00 -- Pignons, en coques',
+   'altLabel': '-- Pignons, en coques',
+   'scopeNote': 'Pignons, frais ou secs, en coques'}],
+...]
+```
+
+The first time you run this it might take a while as it downloads the data needed for [semantic search](https://www.sbert.net/examples/applications/semantic-search/README.html), and vectorizes the API vocabularies.
 
 ## Contributing
 
