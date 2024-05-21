@@ -1,4 +1,7 @@
+import itertools
 import locale
+import warnings
+from collections import defaultdict
 from enum import Enum
 from functools import reduce
 from urllib.parse import urljoin
@@ -105,75 +108,114 @@ class GlossaryAPI:
         components: dict[str, CommonSchemes | None] = DEFAULT_COMPONENTS,
     ) -> None:
         """Download data and metadata to perform semantic search queries"""
-        self.embedder = SentenceTransformer("all-MiniLM-L6-v2")
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=FutureWarning)
+            self._embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
-    def schemes(self) -> list:
+        self._catalogues: dict[str, str] = {}
+        self._embeddings: dict[str, torch.Tensor] = {}
+        self._semantic_search = True
+
+        for cs in CommonSchemes:
+            self._catalogues[cs.value] = defaultdict(list)
+            for concept in self.concepts_for_scheme(cs):
+                for label in ("prefLabel", "altLabel", "scopeNote"):
+                    if concept.get(label):
+                        self._catalogues[cs.value][concept[label]].append(concept)
+
+    def schemes(self) -> list[dict]:
         """Get all concept schemes, regardless of type"""
-        return self._requests_get("schemes")["concept_schemes"]
+        return self._requests_get("schemes")
 
-    def concepts_for_scheme(self, scheme_iri: str | Enum) -> list:
+    def _validate_iri(self, iri: str) -> None:
+        """Basic IRI validation.
+
+        Args:
+            iri (str): The [IRI](https://en.wikipedia.org/wiki/Internationalized_Resource_Identifier)
+
+        Raises:
+            ValueError: The IRI is not valid
+            KeyError: The requested resource was not found
+
+        """
+        pass
+
+    def concepts_for_scheme(self, scheme_iri: str | Enum) -> list[dict]:
         if isinstance(scheme_iri, Enum):
             scheme_iri = scheme_iri.value
-        # TBD: Validate input arg
+        self._validate_iri(scheme_iri)
         data = self._requests_get("concepts", {"concept_scheme_iri": scheme_iri})["concepts"]
         if not data and scheme_iri not in {obj["iri"] for obj in self.schemes()}:
             raise KeyError(f"Given concept scheme IRI '{scheme_iri}' not present in glossary")
         return data
 
-    def search(self, query: str) -> str:
-        """Search the the whole concept library
+    def concept(self, concept_iri: str) -> dict:
+        """Return a single concept resource.
 
         Args:
             query (str): the search query string
+            scope (str, CommonSchemes, None): If given, limit the search to one concept scheme
 
         Returns:
-            list of results
+            A dictionary of the requested resource
+
+        Raises:
+            ValueError: The IRI is not valid
+            KeyError: The requested resource was not found
+
+        """
+        self._validate_iri(concept_iri)
+        data = self._requests_get("concept", {"concept_iri": concept_iri})
+        if not data:
+            raise KeyError(f"Given concept IRI '{concept_iri}' not present in glossary")
+        return data
+
+    def search(self, query: str) -> list[dict]:
+        """Search the the concept library using the `/search` endpoint.
+
+        Args:
+            query (str): the search query string
+            scope (str, CommonSchemes, None): If given, limit the search to one concept scheme
+
+        Returns:
+            list of resources matching the search query.
         """
         return self._requests_get("search", {"search_term": query})["concepts"]
 
+    def semantic_search(
+        self, query: str, scope: str | CommonSchemes | None = None, min_num_results: int = 10
+    ) -> list[dict]:
+        """Perform semantic search query.
 
-# # Corpus with example sentences
-# corpus = [
-#     "A man is eating food.",
-#     "A man is eating a piece of bread.",
-#     "The girl is carrying a baby.",
-#     "A man is riding a horse.",
-#     "A woman is playing violin.",
-#     "Two men pushed carts through the woods.",
-#     "A man is riding a white horse on an enclosed ground.",
-#     "A monkey is playing drums.",
-#     "A cheetah is running behind its prey.",
-# ]
-# corpus_embeddings = embedder.encode(corpus, convert_to_tensor=True)
+        Stolen shamelessly from https://www.sbert.net/examples/applications/semantic-search/README.html#semantic-search.
 
-# # Query sentences:
-# queries = [
-#     "A man is eating pasta.",
-#     "Someone in a gorilla costume is playing a set of drums.",
-#     "A cheetah chases prey on across a field.",
-# ]
+        Args:
+            query (str): the search query string
+            scope (str, CommonSchemes, None): If given, limit the search to one concept scheme
+            min_num_results (int): Minimum number of results to return.
 
+        Returns:
+            list of results
 
-# # Find the closest 5 sentences of the corpus for each query sentence based on cosine similarity
-# top_k = min(5, len(corpus))
-# for query in queries:
-#     query_embedding = embedder.encode(query, convert_to_tensor=True)
+        """
+        if not self._semantic_search:
+            self.setup_semantic_search()
+        if isinstance(scope, CommonSchemes):
+            scope = scope.value
+        if scope not in self._catalogues:
+            raise KeyError(f"Given scope {scope} not present in semantic search cache.")
+        # Later code wants a list, not a dict keys view
+        corpus = list(self._catalogues[scope])
+        num_results = min(min_num_results, len(corpus))
+        # Creating embeddings is relatively expensive
+        if scope not in self._embeddings:
+            self._embeddings[scope] = self._embedder.encode(corpus, convert_to_tensor=True)
+        query_embedding = self._embedder.encode(query, convert_to_tensor=True)
 
-#     # We use cosine-similarity and torch.topk to find the highest 5 scores
-#     cos_scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
-#     top_results = torch.topk(cos_scores, k=top_k)
-
-#     print("\n\n======================\n\n")
-#     print("Query:", query)
-#     print("\nTop 5 most similar sentences in corpus:")
-
-#     for score, idx in zip(top_results[0], top_results[1]):
-#         print(corpus[idx], "(Score: {:.4f})".format(score))
-
-#     """
-#     # Alternatively, we can also use util.semantic_search to perform cosine similarty + topk
-#     hits = util.semantic_search(query_embedding, corpus_embeddings, top_k=5)
-#     hits = hits[0]      #Get the hits for the first query
-#     for hit in hits:
-#         print(corpus[hit['corpus_id']], "(Score: {:.4f})".format(hit['score']))
-#     """
+        cos_scores = util.cos_sim(query_embedding, self._embeddings[scope])[0]
+        return list(
+            itertools.chain(
+                self._catalogues[scope][corpus[idx.item()]]
+                for idx in torch.topk(cos_scores, k=num_results)[1]
+            )
+        )
