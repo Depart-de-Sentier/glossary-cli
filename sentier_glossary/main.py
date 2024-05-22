@@ -180,7 +180,7 @@ class GlossaryAPI:
         Returns:
             list of resources matching the search query.
         """
-        return self._requests_get("search", {"search_term": query})["concepts"]
+        return self._requests_get("search", {"search_term": query})
 
     def semantic_search(
         self, query: str, scope: str | CommonSchemes | None = None, min_num_results: int = 10
