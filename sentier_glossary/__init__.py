@@ -4,7 +4,7 @@ __all__ = (
     "CommonSchemes",
 )
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 
 from .main import CommonSchemes, GlossaryAPI
