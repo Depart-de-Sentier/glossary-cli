@@ -35,6 +35,7 @@ dependencies = [
     "sentence_transformers",
     "requests",
     "pydantic-settings",
+    "sentry-sdk",
 ]
 
 [project.urls]
