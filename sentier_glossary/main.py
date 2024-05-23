@@ -43,47 +43,6 @@ class GlossaryAPI:
         self.language_code = self.get_language_code(language_code)
         print(f"Using language code '{self.language_code}'; change with `set_language_code()`")
 
-    def _requests_get(self, url: str, params: dict | None = None) -> dict:
-        """Perform a `requests.get(api_url, …)` with given parameters.
-
-        Args:
-            url: The API endpoint.
-            params: Any additional parameters to pass.
-
-        Returns:
-            dict: A dictionary containing the parsed JSON response.
-
-        Raises:
-            requests.exceptions.RequestException: If there is an error with the request,
-            such as a connection error or an invalid URL.
-
-        """
-        params = self._params | params if params is not None else self._params
-        response = requests.get(
-            reduce(urljoin, [self._cfg.base_url, f"{self._cfg.api_version}/", url]),
-            params=params,
-        )
-        try:
-            response.raise_for_status()
-        except requests.exceptions.RequestException as error:
-            msg = f"Error fetching data: {error}"
-            if response is not None:
-                status_code = response.status_code
-                msg += f"\nHTTP {status_code}"
-                if 400 <= status_code < 600:
-                    try:
-                        error_data = response.json()
-                        msg += f"\nResponse: {error_data}"
-                    except ValueError:
-                        msg += f"\nResponse: {response.text}"
-            raise requests.exceptions.RequestException(msg) from error
-        return response.json()
-
-    @property
-    def _params(self) -> dict:
-        """Default parameters for every request."""
-        return {"lang": self.language_code}
-
     def get_language_code(self, language_code: str | None = None) -> str:
         """Get 2-letter (Set 1) ISO 639 language code."""
         code = language_code or locale.getlocale()[0] or self._cfg.fallback_language
@@ -129,19 +88,6 @@ class GlossaryAPI:
     def schemes(self) -> list[dict]:
         """Get all concept schemes, regardless of type"""
         return self._requests_get("schemes")
-
-    def _validate_iri(self, iri: str) -> None:
-        """Basic IRI validation.
-
-        Args:
-            iri (str): The [IRI](https://en.wikipedia.org/wiki/Internationalized_Resource_Identifier)
-
-        Raises:
-            ValueError: The IRI is not valid
-            KeyError: The requested resource was not found
-
-        """
-        pass
 
     def concepts_for_scheme(self, scheme_iri: str | Enum) -> list[dict]:
         if isinstance(scheme_iri, Enum):
@@ -234,6 +180,66 @@ class GlossaryAPI:
                 'iri': obj['iri'],
             } for obj in results])
         return results
+
+    def _requests_get(self, url: str, params: dict | None = None) -> dict:
+        """Perform a `requests.get(api_url, …)` with given parameters.
+
+        Args:
+            url: The API endpoint.
+            params: Any additional parameters to pass.
+
+        Returns:
+            dict: A dictionary containing the parsed JSON response.
+
+        Raises:
+            requests.exceptions.RequestException: If there is an error with the request,
+            such as a connection error or an invalid URL.
+
+        """
+        params = self._params | params if params is not None else self._params
+        response = requests.get(
+            reduce(urljoin, [self._cfg.base_url, f"{self._cfg.api_version}/", url]),
+            params=params,
+        )
+        try:
+            response.raise_for_status()
+        except requests.exceptions.RequestException as error:
+            msg = f"Error fetching data: {error}"
+            if response is not None:
+                status_code = response.status_code
+                msg += f"\nHTTP {status_code}"
+                if 400 <= status_code < 600:
+                    try:
+                        error_data = response.json()
+                        msg += f"\nResponse: {error_data}"
+                    except ValueError:
+                        msg += f"\nResponse: {response.text}"
+            raise requests.exceptions.RequestException(msg) from error
+        return response.json()
+
+    def _complete_label(self, data: dict) -> str:
+        if len(data.get('broader', [])):
+            return " ⧺ ".join([obj['prefLabel'] for obj in data['broader']]) + " ⧺ " + data['prefLabel']
+        else:
+            return data['prefLabel']
+
+    @property
+    def _params(self) -> dict:
+        """Default parameters for every request."""
+        return {"lang": self.language_code}
+
+    def _validate_iri(self, iri: str) -> None:
+        """Basic IRI validation.
+
+        Args:
+            iri (str): The [IRI](https://en.wikipedia.org/wiki/Internationalized_Resource_Identifier)
+
+        Raises:
+            ValueError: The IRI is not valid
+            KeyError: The requested resource was not found
+
+        """
+        pass
 
     def _fill_out_concept_broader_relationships(self, data: dict, attributes: list[str] = ['iri', 'prefLabel']) -> dict:
         """Add some additional information about broader relations of a concept"""
