@@ -36,6 +36,7 @@ dependencies = [
     "requests",
     "sentence_transformers",
     "torch",
+    "pandas",
 ]
 
 [project.urls]

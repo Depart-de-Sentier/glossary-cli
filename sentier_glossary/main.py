@@ -1,3 +1,4 @@
+import pandas as pd
 import itertools
 import locale
 import warnings
@@ -184,17 +185,6 @@ class GlossaryAPI:
         """
         return self._requests_get("search", {"search_term": query})
 
-    def _fill_out_concept_broader_relationships(self, data: dict, attributes: list[str] = ['iri', 'prefLabel']) -> dict:
-        """Add some additional information about broader relations of a concept"""
-        if 'relations' in data:
-            broader = [
-                self.concept(obj['target_concept_iri'])
-                for obj in data['relations']
-                if obj['type'] == 'broader'
-            ]
-            data['broader'] = [{key: obj.get(key) for key in attributes} for obj in broader]
-        return data
-
     def semantic_search(
         self, query: str, scope: str | CommonSchemes | None = None, dataframe: bool = False, min_num_results: int = 10
     ) -> list[dict]:
@@ -235,4 +225,24 @@ class GlossaryAPI:
             for lst in object_lists
             for obj in lst
         }.values())
+        if dataframe:
+            return pd.DataFrame([{
+                'prefLabel': obj.get('prefLabel'),
+                'completeLabel': self._complete_label(obj),
+                'broader_iri': obj["broader"][0].get('iri', None) if obj.get('broader') else None,
+                'broader_prefLabel': obj["broader"][0].get('prefLabel', None) if obj.get('broader') else None,
+                'iri': obj['iri'],
+            } for obj in results])
+        return results
+
+    def _fill_out_concept_broader_relationships(self, data: dict, attributes: list[str] = ['iri', 'prefLabel']) -> dict:
+        """Add some additional information about broader relations of a concept"""
+        if 'relations' in data:
+            broader = [
+                self.concept(obj['target_concept_iri'])
+                for obj in data['relations']
+                if obj['type'] == 'broader'
+                and obj['source_concept_iri'] == data['iri']
+            ]
+            data['broader'] = [{key: obj.get(key) for key in attributes} for obj in broader]
         return data
