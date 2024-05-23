@@ -146,7 +146,7 @@ class GlossaryAPI:
         if isinstance(scheme_iri, Enum):
             scheme_iri = scheme_iri.value
         self._validate_iri(scheme_iri)
-        data = self._requests_get("concepts", {"concept_scheme_iri": scheme_iri})["concepts"]
+        data = self._requests_get("concepts", {"concept_scheme_iri": scheme_iri})
         if not data and scheme_iri not in {obj["iri"] for obj in self.schemes()}:
             raise KeyError(f"Given concept scheme IRI '{scheme_iri}' not present in glossary")
         return data
