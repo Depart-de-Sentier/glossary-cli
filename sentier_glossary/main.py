@@ -20,6 +20,8 @@ class CommonSchemes(Enum):
     icst2009 = "http://data.europa.eu/z1e/icstcom2009/icst"
     prodcom2023 = "http://data.europa.eu/qw1/prodcom2023/prodcom2023"
     isic4 = "https://unstats.un.org/classifications/ISIC/rev4/scheme"
+    icc11 = "https://stats.fao.org/classifications/ICC/v1.1/scheme"
+    wca2020 = "https://stats.fao.org/classifications/WCA2020/crops/scheme"
 
 
 DEFAULT_COMPONENTS = {
