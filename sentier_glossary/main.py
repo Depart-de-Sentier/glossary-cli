@@ -43,7 +43,7 @@ class GlossaryAPI:
 
     def set_language_code(self, language_code: str) -> None:
         """Override language code from system locale or input argument."""
-        if not isinstance(language_code, str) and len(language_code) >= 2:
+        if not (isinstance(language_code, str) and len(language_code) >= 2):
             raise ValueError(
                 f"Invalid language code {language_code} given. Must be `str` of length two."
             )
@@ -80,41 +80,46 @@ class GlossaryAPI:
         return self._requests_get("schemes")
 
     def concepts_for_scheme(self, scheme_iri: str | Enum) -> list[dict]:
+        """Return a list of concepts for a given scheme.
+
+        Args:
+            scheme_iri (str): the scheme IRI
+
+        Returns:
+            A list of dictionaries of concepts in the scheme
+
+        Raises:
+            ValueError: The IRI is not valid
+            requests.exceptionsRequestException: The requested resource was not found
+
+        """
         if isinstance(scheme_iri, Enum):
             scheme_iri = scheme_iri.value
         self._validate_iri(scheme_iri)
-        data = self._requests_get("concepts", {"concept_scheme_iri": scheme_iri})
-        if not data and scheme_iri not in {obj["iri"] for obj in self.schemes()}:
-            raise KeyError(f"Given concept scheme IRI '{scheme_iri}' not present in glossary")
-        return data
+        return self._requests_get("concepts", {"concept_scheme_iri": scheme_iri})
 
     def concept(self, concept_iri: str) -> dict:
         """Return a single concept resource.
 
         Args:
-            query (str): the search query string
-            scope (str, CommonSchemes, None): If given, limit the search to one concept scheme
+            concept_iri (str): the concept IRI
 
         Returns:
             A dictionary of the requested resource
 
         Raises:
             ValueError: The IRI is not valid
-            KeyError: The requested resource was not found
+            requests.exceptionsRequestException: The requested resource was not found
 
         """
         self._validate_iri(concept_iri)
-        data = self._requests_get("concept", {"concept_iri": concept_iri})
-        if not data:
-            raise KeyError(f"Given concept IRI '{concept_iri}' not present in glossary")
-        return data
+        return self._requests_get("concept", {"concept_iri": concept_iri})
 
     def search(self, query: str) -> list[dict]:
         """Search the the concept library using the `/search` endpoint.
 
         Args:
             query (str): the search query string
-            scope (str, CommonSchemes, None): If given, limit the search to one concept scheme
 
         Returns:
             list of resources matching the search query.

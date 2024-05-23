@@ -73,13 +73,16 @@ packages = ["sentier_glossary"]
 version = {attr = "sentier_glossary.__version__"}
 
 [tool.pytest.ini_options]
-addopts = "--cov sentier_glossary --cov-report term-missing --verbose"
+addopts = "--cov sentier_glossary --cov-report term-missing --verbose -m \"not slow\""
 norecursedirs = [
     "dist",
     "build",
     ".tox"
 ]
 testpaths = ["tests/*/*.py"]
+markers = [
+    "slow: marks tests as slow (run all with '-m \"slow or not slow\"')",
+]
 
 [tool.flake8]
 # Some sane defaults for the code style checker flake8
