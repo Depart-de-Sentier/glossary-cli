@@ -215,9 +215,12 @@ class GlossaryAPI:
         query_embedding = self._embedder.encode(query, convert_to_tensor=True)
 
         cos_scores = util.cos_sim(query_embedding, self._embeddings[scope])[0]
-        return list(
-            itertools.chain(
-                self._catalogues[scope][corpus[idx.item()]]
-                for idx in torch.topk(cos_scores, k=num_results)[1]
-            )
-        )
+        object_lists = [
+            self._catalogues[scope][corpus[idx.item()]]
+            for idx in torch.topk(cos_scores, k=num_results)[1]
+        ]
+        return list({
+            obj['iri']: obj
+            for lst in object_lists
+            for obj in lst
+        }.values())
