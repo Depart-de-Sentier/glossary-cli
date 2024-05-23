@@ -1,5 +1,3 @@
-import pandas as pd
-import itertools
 import locale
 import warnings
 from collections import defaultdict
@@ -7,6 +5,7 @@ from enum import Enum
 from functools import reduce
 from urllib.parse import urljoin
 
+import pandas as pd
 import requests
 import torch
 from sentence_transformers import SentenceTransformer, util  # type: ignore
@@ -23,14 +22,6 @@ class CommonSchemes(Enum):
     isic4 = "https://unstats.un.org/classifications/ISIC/rev4/scheme"
     icc11 = "https://stats.fao.org/classifications/ICC/v1.1/scheme"
     wca2020 = "https://stats.fao.org/classifications/WCA2020/crops/scheme"
-
-
-DEFAULT_COMPONENTS = {
-    "process": CommonSchemes.cn2024,
-    "product": CommonSchemes.nace21,
-    "unit": None,
-    "place": None,
-}
 
 
 class GlossaryAPI:
@@ -67,12 +58,11 @@ class GlossaryAPI:
     def setup_semantic_search(
         self,
         model_id: str = "all-mpnet-base-v2",
-        components: dict[str, CommonSchemes | None] = DEFAULT_COMPONENTS,
     ) -> None:
         """Download data and metadata to perform semantic search queries"""
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=FutureWarning)
-            self._embedder = SentenceTransformer("all-MiniLM-L6-v2")
+            self._embedder = SentenceTransformer(model_id)
 
         self._catalogues: dict[str, str] = {}
         self._embeddings: dict[str, torch.Tensor] = {}
@@ -132,7 +122,11 @@ class GlossaryAPI:
         return self._requests_get("search", {"search_term": query})
 
     def semantic_search(
-        self, query: str, scope: str | CommonSchemes | None = None, dataframe: bool = False, min_num_results: int = 10
+        self,
+        query: str,
+        scope: str | CommonSchemes | None = None,
+        dataframe: bool = False,
+        min_num_results: int = 10,
     ) -> list[dict]:
         """Perform semantic search query.
 
@@ -166,19 +160,30 @@ class GlossaryAPI:
             self._catalogues[scope][corpus[idx.item()]]
             for idx in torch.topk(cos_scores, k=num_results)[1]
         ]
-        results = list({
-            obj['iri']: self._fill_out_concept_broader_relationships(self.concept(obj['iri']))
-            for lst in object_lists
-            for obj in lst
-        }.values())
+        results = list(
+            {
+                obj["iri"]: self._fill_out_concept_broader_relationships(self.concept(obj["iri"]))
+                for lst in object_lists
+                for obj in lst
+            }.values()
+        )
         if dataframe:
-            return pd.DataFrame([{
-                'prefLabel': obj.get('prefLabel'),
-                'completeLabel': self._complete_label(obj),
-                'broader_iri': obj["broader"][0].get('iri', None) if obj.get('broader') else None,
-                'broader_prefLabel': obj["broader"][0].get('prefLabel', None) if obj.get('broader') else None,
-                'iri': obj['iri'],
-            } for obj in results])
+            return pd.DataFrame(
+                [
+                    {
+                        "prefLabel": obj.get("prefLabel"),
+                        "completeLabel": self._complete_label(obj),
+                        "broader_iri": (
+                            obj["broader"][0].get("iri", None) if obj.get("broader") else None
+                        ),
+                        "broader_prefLabel": (
+                            obj["broader"][0].get("prefLabel", None) if obj.get("broader") else None
+                        ),
+                        "iri": obj["iri"],
+                    }
+                    for obj in results
+                ]
+            )
         return results
 
     def _requests_get(self, url: str, params: dict | None = None) -> dict:
@@ -200,6 +205,7 @@ class GlossaryAPI:
         response = requests.get(
             reduce(urljoin, [self._cfg.base_url, f"{self._cfg.api_version}/", url]),
             params=params,
+            timeout=10,
         )
         try:
             response.raise_for_status()
@@ -218,10 +224,13 @@ class GlossaryAPI:
         return response.json()
 
     def _complete_label(self, data: dict) -> str:
-        if len(data.get('broader', [])):
-            return " ⧺ ".join([obj['prefLabel'] for obj in data['broader']]) + " ⧺ " + data['prefLabel']
-        else:
-            return data['prefLabel']
+        if len(data.get("broader", [])):
+            return (
+                " ⧺ ".join([obj["prefLabel"] for obj in data["broader"]])
+                + " ⧺ "
+                + data["prefLabel"]
+            )
+        return data["prefLabel"]
 
     @property
     def _params(self) -> dict:
@@ -231,6 +240,8 @@ class GlossaryAPI:
     def _validate_iri(self, iri: str) -> None:
         """Basic IRI validation.
 
+        # TBD
+
         Args:
             iri (str): The [IRI](https://en.wikipedia.org/wiki/Internationalized_Resource_Identifier)
 
@@ -239,16 +250,18 @@ class GlossaryAPI:
             KeyError: The requested resource was not found
 
         """
-        pass
 
-    def _fill_out_concept_broader_relationships(self, data: dict, attributes: list[str] = ['iri', 'prefLabel']) -> dict:
+    def _fill_out_concept_broader_relationships(
+        self, data: dict, attributes: list[str] | None = None
+    ) -> dict:
         """Add some additional information about broader relations of a concept"""
-        if 'relations' in data:
+        if attributes is None:
+            attributes = ["iri", "prefLabel"]
+        if "relations" in data:
             broader = [
-                self.concept(obj['target_concept_iri'])
-                for obj in data['relations']
-                if obj['type'] == 'broader'
-                and obj['source_concept_iri'] == data['iri']
+                self.concept(obj["target_concept_iri"])
+                for obj in data["relations"]
+                if obj["type"] == "broader" and obj["source_concept_iri"] == data["iri"]
             ]
-            data['broader'] = [{key: obj.get(key) for key in attributes} for obj in broader]
+            data["broader"] = [{key: obj.get(key) for key in attributes} for obj in broader]
         return data
