@@ -32,7 +32,7 @@ def test_locale_lang_blank_string():
 @patch("locale.getlocale")
 def test_locale_invalid(loc: Mock):
     loc.return_value = ("p", "UTF-8")
-    with pytest.raises(ValueError):
+    with pytest.warns(UserWarning, match='Switching to fallback:'):
         g.GlossaryAPI()
 
 

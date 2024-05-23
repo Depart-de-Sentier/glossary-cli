@@ -4,6 +4,7 @@ from collections import defaultdict
 from enum import Enum
 from functools import reduce
 from urllib.parse import urljoin
+import warnings
 
 import pandas as pd
 import requests
@@ -39,7 +40,11 @@ class GlossaryAPI:
         code = language_code or locale.getlocale()[0] or self._cfg.fallback_language
         if isinstance(code, str) and len(code) >= 2:
             return code[:2].lower()
-        raise ValueError(f"Invalid language code {code} found; set locale or `default_language`")
+        warnings.warn(f"""
+            Unexpected language code encountered: '{code}'.
+            Switching to fallback: '{self._cfg.fallback_language}'
+        """)
+        return self._cfg.fallback_language
 
     def set_language_code(self, language_code: str) -> None:
         """Override language code from system locale or input argument."""
