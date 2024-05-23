@@ -184,8 +184,19 @@ class GlossaryAPI:
         """
         return self._requests_get("search", {"search_term": query})
 
+    def _fill_out_concept_broader_relationships(self, data: dict, attributes: list[str] = ['iri', 'prefLabel']) -> dict:
+        """Add some additional information about broader relations of a concept"""
+        if 'relations' in data:
+            broader = [
+                self.concept(obj['target_concept_iri'])
+                for obj in data['relations']
+                if obj['type'] == 'broader'
+            ]
+            data['broader'] = [{key: obj.get(key) for key in attributes} for obj in broader]
+        return data
+
     def semantic_search(
-        self, query: str, scope: str | CommonSchemes | None = None, min_num_results: int = 10
+        self, query: str, scope: str | CommonSchemes | None = None, dataframe: bool = False, min_num_results: int = 10
     ) -> list[dict]:
         """Perform semantic search query.
 
@@ -219,8 +230,9 @@ class GlossaryAPI:
             self._catalogues[scope][corpus[idx.item()]]
             for idx in torch.topk(cos_scores, k=num_results)[1]
         ]
-        return list({
-            obj['iri']: obj
+        results = list({
+            obj['iri']: self._fill_out_concept_broader_relationships(self.concept(obj['iri']))
             for lst in object_lists
             for obj in lst
         }.values())
+        return data
